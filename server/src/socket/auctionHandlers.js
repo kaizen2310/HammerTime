@@ -18,7 +18,7 @@ export const registerAuctionHandlers = (io, socket) => {
             currentWinnerId: socket.user.id,
           },
         },
-        { new: true }
+        { returnDocument: 'after' }
       )
 
       if (!updatedAuction) {

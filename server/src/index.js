@@ -11,6 +11,9 @@ import auctionRoutes from './routes/auctions.js'
 import { socketAuth } from './socket/socketAuth.js'
 import { registerRoomHandlers } from './socket/roomHandlers.js'
 import { registerAuctionHandlers } from './socket/auctionHandlers.js'
+import { Redis } from 'ioredis'
+import { createAdapter } from '@socket.io/redis-adapter'
+
 
 dotenv.config()
 
@@ -35,6 +38,15 @@ const io = new Server(server, {
     credentials: true,
   },
 })
+
+const pubClient = new Redis(process.env.REDIS_URL)
+const subClient = pubClient.duplicate()
+
+pubClient.on('error', (err) => console.error('Redis pub client error:', err.message))
+subClient.on('error', (err) => console.error('Redis sub client error:', err.message))
+pubClient.on('connect', () => console.log('Redis pub client connected'))
+
+io.adapter(createAdapter(pubClient, subClient))
 
 io.use(socketAuth)
 
