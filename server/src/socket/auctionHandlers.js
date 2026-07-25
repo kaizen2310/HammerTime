@@ -1,29 +1,47 @@
 import Auction from '../models/Auction.js'
+import Bid from '../models/Bid.js'
 
 export const registerAuctionHandlers = (io, socket) => {
   socket.on('place_bid', async ({ auctionId, amount }) => {
     try {
-      const auction = await Auction.findById(auctionId)
+      const updatedAuction = await Auction.findOneAndUpdate(
+        {
+          _id: auctionId,
+          status: 'active',
+          $expr: {
+            $lt: [{ $ifNull: ['$currentBid', '$startingPrice'] }, amount],
+          },
+        },
+        {
+          $set: {
+            currentBid: amount,
+            currentWinnerId: socket.user.id,
+          },
+        },
+        { new: true }
+      )
 
-      if (!auction) {
-        return socket.emit('bid_error', { message: 'Auction not found' })
-      }
+      if (!updatedAuction) {
+        const existing = await Auction.findById(auctionId)
 
-      if (auction.status !== 'active') {
-        return socket.emit('bid_error', { message: 'This auction has ended' })
-      }
+        if (!existing) {
+          return socket.emit('bid_error', { message: 'Auction not found' })
+        }
+        if (existing.status !== 'active') {
+          return socket.emit('bid_error', { message: 'This auction has ended' })
+        }
 
-      const currentPrice = auction.currentBid || auction.startingPrice
-
-      if (amount <= currentPrice) {
+        const currentPrice = existing.currentBid || existing.startingPrice
         return socket.emit('bid_error', {
           message: `Bid must be higher than ₹${currentPrice}`,
         })
       }
 
-      auction.currentBid = amount
-      auction.currentWinnerId = socket.user.id
-      await auction.save()
+      await Bid.create({
+        auctionId,
+        bidderId: socket.user.id,
+        amount,
+      })
 
       io.to(auctionId).emit('bid_update', {
         currentBid: amount,
