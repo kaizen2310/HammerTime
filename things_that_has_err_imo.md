@@ -6,4 +6,5 @@
 
 # bidding currency and comma seprated price
 
-#
+# anyone can bid even after auction ended
+
