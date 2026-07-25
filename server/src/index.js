@@ -10,7 +10,7 @@ import authRoutes from './routes/auth.js'
 import auctionRoutes from './routes/auctions.js'
 import { socketAuth } from './socket/socketAuth.js'
 import { registerRoomHandlers } from './socket/roomHandlers.js'
-
+import { registerAuctionHandlers } from './socket/auctionHandlers.js'
 
 dotenv.config()
 
@@ -42,6 +42,7 @@ io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id, 'user:', socket.user.username)
 
   registerRoomHandlers(io, socket)
+  registerAuctionHandlers(io, socket)
 
   socket.on('disconnect', () => {
     console.log('Socket disconnected:', socket.id)
