@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../lib/api'
-import { connectSocket, disconnectSocket } from '../lib/socket'
+import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Eye } from 'lucide-react'
 
 export default function AuctionRoom() {
@@ -12,6 +14,11 @@ export default function AuctionRoom() {
   const [auction, setAuction] = useState(null)
   const [loading, setLoading] = useState(true)
   const [viewerCount, setViewerCount] = useState(0)
+
+  const [bidAmount, setBidAmount] = useState('')
+  const [bidError, setBidError] = useState('')
+  const [placingBid, setPlacingBid] = useState(false)
+  const [lastBidder, setLastBidder] = useState('')
 
   useEffect(() => {
     api.get(`/auctions/${id}`)
@@ -29,11 +36,41 @@ export default function AuctionRoom() {
       setViewerCount(count)
     })
 
+    socket.on('bid_update', ({ currentBid, bidderUsername }) => {
+      setAuction((prev) => (prev ? { ...prev, currentBid } : prev))
+      setLastBidder(bidderUsername)
+      setBidAmount('')
+      setBidError('')
+      setPlacingBid(false)
+    })
+
+    socket.on('bid_error', ({ message }) => {
+      setBidError(message)
+      setPlacingBid(false)
+    })
+
     return () => {
       socket.emit('leave_room', id)
+      socket.off('viewer_count')
+      socket.off('bid_update')
+      socket.off('bid_error')
       disconnectSocket()
     }
   }, [id])
+
+  const handlePlaceBid = (e) => {
+    e.preventDefault()
+    setBidError('')
+
+    const amount = Number(bidAmount)
+    if (!amount || amount <= 0) {
+      setBidError('Enter a valid amount')
+      return
+    }
+
+    setPlacingBid(true)
+    getSocket().emit('place_bid', { auctionId: id, amount })
+  }
 
   if (loading) {
     return <p className="text-muted-foreground">Loading...</p>
@@ -70,6 +107,11 @@ export default function AuctionRoom() {
                 {auction.currentBid ? `₹${auction.currentBid}` : 'No bids yet'}
               </span>
             </p>
+            {lastBidder && (
+              <p className="text-muted-foreground">
+                Last bid by {lastBidder}
+              </p>
+            )}
             <p className="text-muted-foreground">
               Sold by {auction.sellerId?.username}
             </p>
@@ -78,9 +120,27 @@ export default function AuctionRoom() {
             </p>
           </div>
           <Separator />
-          <div className="border rounded-lg p-4 text-sm text-muted-foreground text-center">
-            Live bidding coming in Phase 2b
-          </div>
+          <form onSubmit={handlePlaceBid} className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min="0"
+                placeholder={`More than ₹${auction.currentBid || auction.startingPrice}`}
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+                disabled={auction.status !== 'active'}
+              />
+              <Button
+                type="submit"
+                disabled={placingBid || auction.status !== 'active'}
+              >
+                {placingBid ? 'Placing...' : 'Place bid'}
+              </Button>
+            </div>
+            {bidError && (
+              <p className="text-sm text-destructive">{bidError}</p>
+            )}
+          </form>
         </CardContent>
       </Card>
     </div>
