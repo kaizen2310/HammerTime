@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Eye } from 'lucide-react'
+import { Eye, Trophy } from 'lucide-react'
 
 export default function AuctionRoom() {
   const { id } = useParams()
@@ -19,6 +19,8 @@ export default function AuctionRoom() {
   const [bidError, setBidError] = useState('')
   const [placingBid, setPlacingBid] = useState(false)
   const [lastBidder, setLastBidder] = useState('')
+
+  const [endedInfo, setEndedInfo] = useState(null)
 
   useEffect(() => {
     api.get(`/auctions/${id}`)
@@ -49,11 +51,17 @@ export default function AuctionRoom() {
       setPlacingBid(false)
     })
 
+    socket.on('auction_ended', ({ finalBid, winnerUsername }) => {
+      setAuction((prev) => (prev ? { ...prev, status: 'ended' } : prev))
+      setEndedInfo({ finalBid, winnerUsername })
+    })
+
     return () => {
       socket.emit('leave_room', id)
       socket.off('viewer_count')
       socket.off('bid_update')
       socket.off('bid_error')
+      socket.off('auction_ended')
       disconnectSocket()
     }
   }, [id])
@@ -90,12 +98,29 @@ export default function AuctionRoom() {
               <Eye className="size-3" />
               {viewerCount}
             </Badge>
-            <Badge variant="secondary">{auction.status}</Badge>
+            <Badge variant={auction.status === 'active' ? 'secondary' : 'outline'}>
+              {auction.status}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-muted-foreground">{auction.description}</p>
           <Separator />
+
+          {endedInfo && (
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 text-sm">
+              <Trophy className="size-4 shrink-0" />
+              {endedInfo.winnerUsername ? (
+                <span>
+                  Sold to <span className="font-medium">{endedInfo.winnerUsername}</span> for{' '}
+                  <span className="font-medium">₹{endedInfo.finalBid}</span>
+                </span>
+              ) : (
+                <span>Auction ended with no bids</span>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1 text-sm">
             <p>
               Starting price:{' '}
@@ -120,6 +145,7 @@ export default function AuctionRoom() {
             </p>
           </div>
           <Separator />
+
           <form onSubmit={handlePlaceBid} className="space-y-2">
             <div className="flex gap-2">
               <Input

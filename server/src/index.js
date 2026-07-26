@@ -13,9 +13,11 @@ import { registerRoomHandlers } from './socket/roomHandlers.js'
 import { registerAuctionHandlers } from './socket/auctionHandlers.js'
 import { Redis } from 'ioredis'
 import { createAdapter } from '@socket.io/redis-adapter'
+import { startAuctionWorker } from './workers/auctionWorker.js'
 
 
-dotenv.config()
+//dotenv.config()
+//every thing loads before we run not in runtime so, that why it shows (0) env inject cause everying is already injected if something new comes then it will show 
 
 const app = express()
 
@@ -60,6 +62,8 @@ io.on('connection', (socket) => {
     console.log('Socket disconnected:', socket.id)
   })
 })
+
+startAuctionWorker(io)
 
 mongoose
   .connect(process.env.MONGODB_URI)

@@ -18,3 +18,9 @@
 imp we should be able to see how much time is remained for auction to close
 and there should be seperate live auction or can we somehow itegrate this into our system 
 is that we place live bids and each bid has will have added time to out bid you let say a bid then another auctioner will have supppose 1 min to bid against it or it gets to bidder a, 
+
+# current bid should be on top . above starting bid so bidders wont get confused
+
+
+# after time running out that action get vanished from auction so someone cant even see who won or what was winning or last bid for that auction
+

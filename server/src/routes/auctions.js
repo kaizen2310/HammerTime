@@ -2,26 +2,28 @@ import { Router } from 'express'
 import Auction from '../models/Auction.js'
 import User from '../models/User.js'
 import { requireAuth } from '../middleware/auth.js'
-
+import { scheduleAuctionEnd } from '../queues/auctionQueue.js'
 
 const router = Router()
 
-router.post('/',requireAuth, async (req,res) =>{
-    try{
-        const {title ,description ,startingPrice ,endsAt} =req.body
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    const { title, description, startingPrice, endsAt } = req.body
 
-        const auction = await Auction.create({
-            title,
-            description,
-            startingPrice,
-            endsAt: new Date(endsAt),
-            sellerId: req.user.id,
-        })
+    const auction = await Auction.create({
+      title,
+      description,
+      startingPrice,
+      endsAt: new Date(endsAt),
+      sellerId: req.user.id,
+    })
 
-        res.status(201).json(auction)
-    } catch(err){
-        return res.status(500).json({err: err.message})
-    }
+    await scheduleAuctionEnd(auction._id, auction.endsAt)
+
+    res.status(201).json(auction)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 router.get('/', async (req,res) => {
