@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../lib/api'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
@@ -7,13 +7,16 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Eye, Trophy } from 'lucide-react'
+import { Eye, Trophy, WifiOff } from 'lucide-react'
+
+const BID_TIMEOUT_MS = 8000
 
 export default function AuctionRoom() {
   const { id } = useParams()
   const [auction, setAuction] = useState(null)
   const [loading, setLoading] = useState(true)
   const [viewerCount, setViewerCount] = useState(0)
+  const [connected, setConnected] = useState(true)
 
   const [bidAmount, setBidAmount] = useState('')
   const [bidError, setBidError] = useState('')
@@ -22,23 +25,56 @@ export default function AuctionRoom() {
 
   const [endedInfo, setEndedInfo] = useState(null)
 
-  useEffect(() => {
-    api.get(`/auctions/${id}`)
+  const bidTimeoutRef = useRef(null)
+
+  const fetchAuction = ({ silent } = {}) => {
+    if (!silent) setLoading(true)
+    return api.get(`/auctions/${id}`)
       .then(({ data }) => setAuction(data))
-      .catch(() => setAuction(null))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (!silent) setAuction(null)
+      })
+      .finally(() => {
+        if (!silent) setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    fetchAuction()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
     const socket = connectSocket()
+    let hasConnectedBefore = false
 
-    socket.emit('join_room', id)
+    socket.on('connect', () => {
+      setConnected(true)
+      socket.emit('join_room', id)
+
+      if (hasConnectedBefore) {
+        fetchAuction({ silent: true })
+      }
+      hasConnectedBefore = true
+    })
+
+    socket.on('disconnect', () => {
+      setConnected(false)
+      setPlacingBid((wasPlacing) => {
+        if (wasPlacing) {
+          clearTimeout(bidTimeoutRef.current)
+          setBidError('Connection lost — please try again')
+        }
+        return false
+      })
+    })
 
     socket.on('viewer_count', (count) => {
       setViewerCount(count)
     })
 
     socket.on('bid_update', ({ currentBid, bidderUsername }) => {
+      clearTimeout(bidTimeoutRef.current)
       setAuction((prev) => (prev ? { ...prev, currentBid } : prev))
       setLastBidder(bidderUsername)
       setBidAmount('')
@@ -47,6 +83,7 @@ export default function AuctionRoom() {
     })
 
     socket.on('bid_error', ({ message }) => {
+      clearTimeout(bidTimeoutRef.current)
       setBidError(message)
       setPlacingBid(false)
     })
@@ -57,13 +94,17 @@ export default function AuctionRoom() {
     })
 
     return () => {
+      clearTimeout(bidTimeoutRef.current)
       socket.emit('leave_room', id)
+      socket.off('connect')
+      socket.off('disconnect')
       socket.off('viewer_count')
       socket.off('bid_update')
       socket.off('bid_error')
       socket.off('auction_ended')
       disconnectSocket()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const handlePlaceBid = (e) => {
@@ -78,6 +119,11 @@ export default function AuctionRoom() {
 
     setPlacingBid(true)
     getSocket().emit('place_bid', { auctionId: id, amount })
+
+    bidTimeoutRef.current = setTimeout(() => {
+      setPlacingBid(false)
+      setBidError('No response from the server — check your connection and try again')
+    }, BID_TIMEOUT_MS)
   }
 
   if (loading) {
@@ -104,6 +150,13 @@ export default function AuctionRoom() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!connected && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+              <WifiOff className="size-4" />
+              Connection lost — reconnecting...
+            </div>
+          )}
+
           <p className="text-muted-foreground">{auction.description}</p>
           <Separator />
 
@@ -154,11 +207,11 @@ export default function AuctionRoom() {
                 placeholder={`More than ₹${auction.currentBid || auction.startingPrice}`}
                 value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
-                disabled={auction.status !== 'active'}
+                disabled={auction.status !== 'active' || !connected}
               />
               <Button
                 type="submit"
-                disabled={placingBid || auction.status !== 'active'}
+                disabled={placingBid || auction.status !== 'active' || !connected}
               >
                 {placingBid ? 'Placing...' : 'Place bid'}
               </Button>

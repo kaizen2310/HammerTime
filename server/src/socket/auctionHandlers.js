@@ -8,6 +8,8 @@ export const registerAuctionHandlers = (io, socket) => {
         {
           _id: auctionId,
           status: 'active',
+          endsAt: { $gt: new Date() },
+          sellerId: { $ne: socket.user.id },
           $expr: {
             $lt: [{ $ifNull: ['$currentBid', '$startingPrice'] }, amount],
           },
@@ -27,7 +29,10 @@ export const registerAuctionHandlers = (io, socket) => {
         if (!existing) {
           return socket.emit('bid_error', { message: 'Auction not found' })
         }
-        if (existing.status !== 'active') {
+        if (existing.sellerId.toString() === socket.user.id) {
+          return socket.emit('bid_error', { message: 'You cannot bid on your own auction' })
+        }
+        if (existing.status !== 'active' || existing.endsAt <= new Date()) {
           return socket.emit('bid_error', { message: 'This auction has ended' })
         }
 

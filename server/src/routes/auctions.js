@@ -40,6 +40,19 @@ router.get('/', async (req, res) => {
   }
 })
 
+router.get('/', async (req, res) => {
+  try {
+    const auctions = await Auction.find({})
+      .populate('sellerId', 'username')
+      .populate('currentWinnerId', 'username')
+      .sort({ createdAt: -1 })
+
+    res.json(auctions)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 router.get('/:id', async (req, res) => {
   try {
     const auction = await Auction.findById(req.params.id)
