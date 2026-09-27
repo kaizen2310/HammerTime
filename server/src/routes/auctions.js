@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import Auction from '../models/Auction.js'
-import User from '../models/User.js'
 import { requireAuth } from '../middleware/auth.js'
+import { validate } from '../middleware/validate.js'
+import { createAuctionSchema } from '../validation/schemas.js'
 import { scheduleAuctionEnd } from '../queues/auctionQueue.js'
 
 const router = Router()
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, validate(createAuctionSchema), async (req, res) => {
   try {
     const { title, description, startingPrice, endsAt } = req.body
 
@@ -26,33 +27,33 @@ router.post('/', requireAuth, async (req, res) => {
   }
 })
 
-router.get('/', async (req,res) => {
-    try{
-        const auctions = await Auction.find({status:'active'})
-            .populate('sellerId','username')
-            .populate('currentWinnerId', 'username')
-            .sort({ endsAt:1})
+router.get('/', async (req, res) => {
+  try {
+    const auctions = await Auction.find({ status: 'active' })
+      .populate('sellerId', 'username')
+      .populate('currentWinnerId', 'username')
+      .sort({ endsAt: 1 })
 
-        res.json(auctions)
-    }catch(err){
-        res.status(500).json({error: err.message})
-    }
+    res.json(auctions)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
-router.get('/:id',async (req, res) => {
-    try{
-        const auction = await Auction.findById(req.params.id)
-            .populate('sellerId','username')
-            .populate('currentWinnerId','username')
+router.get('/:id', async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id)
+      .populate('sellerId', 'username')
+      .populate('currentWinnerId', 'username')
 
-        if(!auction){
-            return res.status(404).json({error : 'Auction not found'})
-        }
-
-        res.json(auction)
-    } catch(err){
-        res.status(500).json({error: err.message})
+    if (!auction) {
+      return res.status(404).json({ error: 'Auction not found' })
     }
+
+    res.json(auction)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 export default router

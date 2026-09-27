@@ -38,6 +38,9 @@ importers:
       socket.io:
         specifier: ^4.8.3
         version: 4.8.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       nodemon:
         specifier: 3.1.14
@@ -750,6 +753,9 @@ packages:
   xmlhttprequest-ssl@2.1.2:
     resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
     engines: {node: '>=0.4.0'}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -1490,3 +1496,5 @@ snapshots:
   ws@8.21.1: {}
 
   xmlhttprequest-ssl@2.1.2: {}
+
+  zod@4.4.3: {}
