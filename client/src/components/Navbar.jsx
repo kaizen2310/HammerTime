@@ -16,7 +16,7 @@ export default function Navbar() {
     <>
       <nav className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link to="/" className="font-semibold text-lg">
-          Hammertime
+          HammerTime
         </Link>
         <div className="flex items-center gap-3">
           {user ? (
