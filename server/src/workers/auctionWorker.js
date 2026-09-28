@@ -22,6 +22,8 @@ export const startAuctionWorker = (io) => {
         winnerUsername: auction.currentWinnerId?.username || null,
       })
 
+      io.emit('auction_status_changed', { auctionId })
+
       console.log(`Auction ${auctionId} ended. Winner: ${auction.currentWinnerId?.username || 'none'}`)
     },
     { connection }

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import Auction from '../models/Auction.js'
+import Bid from '../models/Bid.js'
 import { requireAuth } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { createAuctionSchema } from '../validation/schemas.js'
@@ -29,19 +30,6 @@ router.post('/', requireAuth, validate(createAuctionSchema), async (req, res) =>
 
 router.get('/', async (req, res) => {
   try {
-    const auctions = await Auction.find({ status: 'active' })
-      .populate('sellerId', 'username')
-      .populate('currentWinnerId', 'username')
-      .sort({ endsAt: 1 })
-
-    res.json(auctions)
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
-
-router.get('/', async (req, res) => {
-  try {
     const auctions = await Auction.find({})
       .populate('sellerId', 'username')
       .populate('currentWinnerId', 'username')
@@ -64,6 +52,19 @@ router.get('/:id', async (req, res) => {
     }
 
     res.json(auction)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/:id/bids', async (req, res) => {
+  try {
+    const bids = await Bid.find({ auctionId: req.params.id })
+      .populate('bidderId', 'username')
+      .sort({ createdAt: -1 })
+      .limit(50)
+
+    res.json(bids)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -5,15 +5,30 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { CalendarIcon } from 'lucide-react'
 import { toast } from 'sonner'
+
+const pad = (n) => String(n).padStart(2, '0')
+
+const combineDateTime = (date, time) => {
+  if (!date) return ''
+  const [hours, minutes] = time.split(':').map(Number)
+  const d = new Date(date)
+  d.setHours(hours, minutes, 0, 0)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 export default function CreateAuction() {
   const [form, setForm] = useState({
     title: '',
     description: '',
     startingPrice: '',
-    endsAt: '',
   })
+  const [date, setDate] = useState()
+  const [time, setTime] = useState('18:00')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -21,13 +36,27 @@ export default function CreateAuction() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
+  const handleDateSelect = (selected) => {
+    setDate(selected)
+    setPickerOpen(false)
+  }
+
+  const endsAt = combineDateTime(date, time)
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    if (!endsAt) {
+      toast.error('Pick an end date and time')
+      return
+    }
+
     setLoading(true)
     try {
       const { data } = await api.post('/auctions', {
         ...form,
         startingPrice: Number(form.startingPrice),
+        endsAt,
       })
       toast.success('Auction created')
       navigate(`/auctions/${data._id}`)
@@ -79,15 +108,38 @@ export default function CreateAuction() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="endsAt">Ends At</Label>
-              <Input
-                id="endsAt"
-                name="endsAt"
-                type="datetime-local"
-                value={form.endsAt}
-                onChange={handleChange}
-                required
-              />
+              <Label>Ends At</Label>
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between font-normal"
+                    >
+                      {date ? `${date.toLocaleDateString()} at ${time}` : 'Select date and time'}
+                      <CalendarIcon className="size-4 opacity-60" />
+                    </Button>
+                  }
+                />
+                <PopoverContent className="w-auto space-y-3 p-3">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={handleDateSelect}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="time">Time</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creating...' : 'Create Auction'}

@@ -42,7 +42,7 @@ export const registerAuctionHandlers = (io, socket) => {
         })
       }
 
-      await Bid.create({
+      const bid = await Bid.create({
         auctionId,
         bidderId: socket.user.id,
         amount,
@@ -51,6 +51,7 @@ export const registerAuctionHandlers = (io, socket) => {
       io.to(auctionId).emit('bid_update', {
         currentBid: amount,
         bidderUsername: socket.user.username,
+        createdAt: bid.createdAt,
       })
     } catch (err) {
       socket.emit('bid_error', { message: 'Something went wrong' })

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../lib/api'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
+import { formatCurrency } from '../lib/format'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -22,6 +23,7 @@ export default function AuctionRoom() {
   const [bidError, setBidError] = useState('')
   const [placingBid, setPlacingBid] = useState(false)
   const [lastBidder, setLastBidder] = useState('')
+  const [bidHistory, setBidHistory] = useState([])
 
   const [endedInfo, setEndedInfo] = useState(null)
 
@@ -39,8 +41,24 @@ export default function AuctionRoom() {
       })
   }
 
+  const fetchBidHistory = () => {
+    return api.get(`/auctions/${id}/bids`)
+      .then(({ data }) => {
+        setBidHistory(
+          data.map((bid) => ({
+            id: bid._id,
+            amount: bid.amount,
+            username: bid.bidderId?.username,
+            createdAt: bid.createdAt,
+          }))
+        )
+      })
+      .catch(() => setBidHistory([]))
+  }
+
   useEffect(() => {
     fetchAuction()
+    fetchBidHistory()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -73,13 +91,17 @@ export default function AuctionRoom() {
       setViewerCount(count)
     })
 
-    socket.on('bid_update', ({ currentBid, bidderUsername }) => {
+    socket.on('bid_update', ({ currentBid, bidderUsername, createdAt }) => {
       clearTimeout(bidTimeoutRef.current)
       setAuction((prev) => (prev ? { ...prev, currentBid } : prev))
       setLastBidder(bidderUsername)
       setBidAmount('')
       setBidError('')
       setPlacingBid(false)
+      setBidHistory((prev) => [
+        { id: `live-${Date.now()}`, amount: currentBid, username: bidderUsername, createdAt },
+        ...prev,
+      ])
     })
 
     socket.on('bid_error', ({ message }) => {
@@ -135,7 +157,7 @@ export default function AuctionRoom() {
   }
 
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-lg mx-auto space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{auction.title}</CardTitle>
@@ -166,7 +188,7 @@ export default function AuctionRoom() {
               {endedInfo.winnerUsername ? (
                 <span>
                   Sold to <span className="font-medium">{endedInfo.winnerUsername}</span> for{' '}
-                  <span className="font-medium">₹{endedInfo.finalBid}</span>
+                  <span className="font-medium">{formatCurrency(endedInfo.finalBid)}</span>
                 </span>
               ) : (
                 <span>Auction ended with no bids</span>
@@ -174,28 +196,29 @@ export default function AuctionRoom() {
             </div>
           )}
 
-          <div className="space-y-1 text-sm">
-            <p>
-              Starting price:{' '}
-              <span className="font-medium">₹{auction.startingPrice}</span>
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {auction.currentBid ? 'Current bid' : 'Starting price'}
             </p>
-            <p>
-              Current bid:{' '}
-              <span className="font-medium">
-                {auction.currentBid ? `₹${auction.currentBid}` : 'No bids yet'}
-              </span>
+            <p className="text-3xl font-semibold">
+              {formatCurrency(auction.currentBid || auction.startingPrice)}
             </p>
-            {lastBidder && (
-              <p className="text-muted-foreground">
-                Last bid by {lastBidder}
+            {auction.currentBid ? (
+              <p className="text-xs text-muted-foreground mt-1">
+                Started at {formatCurrency(auction.startingPrice)}
               </p>
-            )}
-            <p className="text-muted-foreground">
-              Sold by {auction.sellerId?.username}
+            ) : null}
+          </div>
+
+          {lastBidder && (
+            <p className="text-sm text-muted-foreground">
+              Last bid by <span className="font-medium">{lastBidder}</span>
             </p>
-            <p className="text-muted-foreground">
-              Ends: {new Date(auction.endsAt).toLocaleString()}
-            </p>
+          )}
+
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>Sold by {auction.sellerId?.username}</p>
+            <p>Ends: {new Date(auction.endsAt).toLocaleString()}</p>
           </div>
           <Separator />
 
@@ -204,7 +227,7 @@ export default function AuctionRoom() {
               <Input
                 type="number"
                 min="0"
-                placeholder={`More than ₹${auction.currentBid || auction.startingPrice}`}
+                placeholder={`More than ${formatCurrency(auction.currentBid || auction.startingPrice)}`}
                 value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
                 disabled={auction.status !== 'active' || !connected}
@@ -220,6 +243,29 @@ export default function AuctionRoom() {
               <p className="text-sm text-destructive">{bidError}</p>
             )}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Bid History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {bidHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No bids yet</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {bidHistory.map((bid) => (
+                <div key={bid.id} className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{bid.username}</span>
+                  <span>{formatCurrency(bid.amount)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {bid.createdAt ? new Date(bid.createdAt).toLocaleTimeString() : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

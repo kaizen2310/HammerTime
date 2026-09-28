@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api'
+import { connectSocket, disconnectSocket } from '../lib/socket'
+import { formatCurrency } from '../lib/format'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,11 +12,27 @@ export default function Home() {
   const [auctions, setAuctions] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    api.get('/auctions')
+  const fetchAuctions = () => {
+    return api.get('/auctions')
       .then(({ data }) => setAuctions(data))
       .catch(() => setAuctions([]))
-      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchAuctions().finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const socket = connectSocket()
+
+    socket.on('auction_status_changed', () => {
+      fetchAuctions()
+    })
+
+    return () => {
+      socket.off('auction_status_changed')
+      disconnectSocket()
+    }
   }, [])
 
   if (loading) {
@@ -78,7 +96,7 @@ function AuctionCard({ auction }) {
       <CardContent className="space-y-2">
         <p className="text-sm text-muted-foreground">{auction.description}</p>
         <p className="text-sm">
-          Starting: <span className="font-medium">₹{auction.startingPrice}</span>
+          Starting: <span className="font-medium">{formatCurrency(auction.startingPrice)}</span>
         </p>
         {isEnded ? (
           <p className="text-sm">
@@ -86,7 +104,7 @@ function AuctionCard({ auction }) {
               <>
                 Won by{' '}
                 <span className="font-medium">{auction.currentWinnerId.username}</span>{' '}
-                for <span className="font-medium">₹{auction.currentBid}</span>
+                for <span className="font-medium">{formatCurrency(auction.currentBid)}</span>
               </>
             ) : (
               <span className="text-muted-foreground">Closed with no bids</span>
@@ -96,7 +114,7 @@ function AuctionCard({ auction }) {
           <p className="text-sm">
             Current bid:{' '}
             <span className="font-medium">
-              {auction.currentBid ? `₹${auction.currentBid}` : 'No bids yet'}
+              {auction.currentBid ? formatCurrency(auction.currentBid) : 'No bids yet'}
             </span>
           </p>
         )}
