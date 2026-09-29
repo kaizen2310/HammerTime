@@ -2,15 +2,17 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../lib/api'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, formatCountdown } from '../lib/format'
+import { useCountdown } from '../hooks/useCountdown'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Eye, Trophy, WifiOff } from 'lucide-react'
+import { Eye, Trophy, WifiOff, Clock } from 'lucide-react'
 
 const BID_TIMEOUT_MS = 8000
+const URGENT_THRESHOLD_MS = 5 * 60 * 1000
 
 export default function AuctionRoom() {
   const { id } = useParams()
@@ -28,6 +30,8 @@ export default function AuctionRoom() {
   const [endedInfo, setEndedInfo] = useState(null)
 
   const bidTimeoutRef = useRef(null)
+
+  const remaining = useCountdown(auction?.endsAt || Date.now())
 
   const fetchAuction = ({ silent } = {}) => {
     if (!silent) setLoading(true)
@@ -156,17 +160,27 @@ export default function AuctionRoom() {
     return <p className="text-muted-foreground">Auction not found.</p>
   }
 
+  const isActive = auction.status === 'active'
+  const isUrgent = isActive && remaining > 0 && remaining <= URGENT_THRESHOLD_MS
+  const countdownLabel = remaining <= 0 ? 'Ending...' : formatCountdown(remaining)
+
   return (
     <div className="max-w-lg mx-auto space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle>{auction.title}</CardTitle>
           <div className="flex items-center gap-2">
+            {isActive && (
+              <Badge variant={isUrgent ? 'destructive' : 'outline'} className="gap-1">
+                <Clock className="size-3" />
+                {countdownLabel}
+              </Badge>
+            )}
             <Badge variant="outline" className="gap-1">
               <Eye className="size-3" />
               {viewerCount}
             </Badge>
-            <Badge variant={auction.status === 'active' ? 'secondary' : 'outline'}>
+            <Badge variant={isActive ? 'secondary' : 'outline'}>
               {auction.status}
             </Badge>
           </div>
