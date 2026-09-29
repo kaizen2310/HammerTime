@@ -2,9 +2,9 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../lib/api'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
-import { formatCurrency, formatCountdown } from '../lib/format'
-import { useCountdown } from '../hooks/useCountdown'
+import { formatCurrency } from '../lib/format'
 import { useAuth } from '../context/AuthContext'
+import AuctionTimerCard from '../components/AuctionTimerCard'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,10 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Eye, Trophy, WifiOff, Clock } from 'lucide-react'
+import { Eye, Trophy, WifiOff } from 'lucide-react'
 
 const BID_TIMEOUT_MS = 8000
-const URGENT_THRESHOLD_MS = 5 * 60 * 1000
 const HIGHLIGHT_MS = 2000
 
 // Newest bid is always first, and bids only ever go up, so row 0 is the highest bid.
@@ -97,8 +96,6 @@ export default function AuctionRoom() {
 
   const bidTimeoutRef = useRef(null)
   const highlightTimeoutRef = useRef(null)
-
-  const remaining = useCountdown(auction?.endsAt || Date.now())
 
   const fetchAuction = ({ silent } = {}) => {
     if (!silent) setLoading(true)
@@ -247,21 +244,15 @@ export default function AuctionRoom() {
 
   const isActive = auction.status === 'active'
   const leadingBidder = auction.currentWinnerId?.username
-  const isUrgent = isActive && remaining > 0 && remaining <= URGENT_THRESHOLD_MS
-  const countdownLabel = remaining <= 0 ? 'Ending...' : formatCountdown(remaining)
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
+      <AuctionTimerCard endsAt={auction.endsAt} isActive={isActive} />
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle>{auction.title}</CardTitle>
           <div className="flex items-center gap-2">
-            {isActive && (
-              <Badge variant={isUrgent ? 'destructive' : 'outline'} className="gap-1">
-                <Clock className="size-3" />
-                {countdownLabel}
-              </Badge>
-            )}
             <Badge variant="outline" className="gap-1">
               <Eye className="size-3" />
               {viewerCount}
