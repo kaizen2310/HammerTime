@@ -10,14 +10,15 @@ import { Calendar } from '@/components/ui/calendar'
 import { CalendarIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
-const pad = (n) => String(n).padStart(2, '0')
-
+// Builds the end time in the user's local timezone and returns it as a UTC ISO string
+// (e.g. "2026-09-30T12:30:00.000Z"), so the server never has to guess the timezone.
 const combineDateTime = (date, time) => {
-  if (!date) return ''
+  if (!date || !time) return ''
   const [hours, minutes] = time.split(':').map(Number)
   const d = new Date(date)
   d.setHours(hours, minutes, 0, 0)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  // toISOString() throws on an invalid date, and this runs during render
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
 export default function CreateAuction() {

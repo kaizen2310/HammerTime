@@ -4,18 +4,86 @@ import api from '../lib/api'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
 import { formatCurrency, formatCountdown } from '../lib/format'
 import { useCountdown } from '../hooks/useCountdown'
+import { useAuth } from '../context/AuthContext'
+import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Eye, Trophy, WifiOff, Clock } from 'lucide-react'
 
 const BID_TIMEOUT_MS = 8000
 const URGENT_THRESHOLD_MS = 5 * 60 * 1000
+const HIGHLIGHT_MS = 2000
+
+// Newest bid is always first, and bids only ever go up, so row 0 is the highest bid.
+function BidHistoryTable({ bids, highlightId, currentUsername, isActive }) {
+  if (bids.length === 0) {
+    return <p className="text-sm text-muted-foreground">No bids yet. Be the first to bid!</p>
+  }
+
+  return (
+    <div className="max-h-72 overflow-y-auto  [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Bidder</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {bids.map((bid, index) => {
+            const isTop = index === 0
+            const isYou = Boolean(currentUsername) && bid.username === currentUsername
+
+            return (
+              <TableRow
+                key={bid.id}
+                className={cn('duration-700', bid.id === highlightId && 'bg-primary/10')}
+              >
+                <TableCell className="font-medium">
+                  <span className="flex items-center gap-2">
+                    {bid.username ?? 'Unknown'}
+                    {isYou && <Badge variant="secondary">You</Badge>}
+                    {isTop && (
+                      <Badge variant={isActive ? 'default' : 'outline'} className="gap-1">
+                        <Trophy />
+                        {isActive ? 'Highest' : 'Winner'}
+                      </Badge>
+                    )}
+                  </span>
+                </TableCell>
+                <TableCell className={cn('text-right', isTop && 'font-semibold')}>
+                  {formatCurrency(bid.amount)}
+                </TableCell>
+                <TableCell
+                  className="text-right text-xs text-muted-foreground"
+                  title={bid.createdAt ? new Date(bid.createdAt).toLocaleString() : undefined}
+                >
+                  {bid.createdAt ? new Date(bid.createdAt).toLocaleTimeString() : ''}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
 
 export default function AuctionRoom() {
   const { id } = useParams()
+  const { user } = useAuth()
   const [auction, setAuction] = useState(null)
   const [loading, setLoading] = useState(true)
   const [viewerCount, setViewerCount] = useState(0)
@@ -24,12 +92,11 @@ export default function AuctionRoom() {
   const [bidAmount, setBidAmount] = useState('')
   const [bidError, setBidError] = useState('')
   const [placingBid, setPlacingBid] = useState(false)
-  const [lastBidder, setLastBidder] = useState('')
   const [bidHistory, setBidHistory] = useState([])
-
-  const [endedInfo, setEndedInfo] = useState(null)
+  const [highlightId, setHighlightId] = useState(null)
 
   const bidTimeoutRef = useRef(null)
+  const highlightTimeoutRef = useRef(null)
 
   const remaining = useCountdown(auction?.endsAt || Date.now())
 
@@ -45,7 +112,7 @@ export default function AuctionRoom() {
       })
   }
 
-  const fetchBidHistory = () => {
+  const fetchBidHistory = ({ silent } = {}) => {
     return api.get(`/auctions/${id}/bids`)
       .then(({ data }) => {
         setBidHistory(
@@ -57,7 +124,9 @@ export default function AuctionRoom() {
           }))
         )
       })
-      .catch(() => setBidHistory([]))
+      .catch(() => {
+        if (!silent) setBidHistory([])
+      })
   }
 
   useEffect(() => {
@@ -76,6 +145,7 @@ export default function AuctionRoom() {
 
       if (hasConnectedBefore) {
         fetchAuction({ silent: true })
+        fetchBidHistory({ silent: true })
       }
       hasConnectedBefore = true
     })
@@ -97,15 +167,21 @@ export default function AuctionRoom() {
 
     socket.on('bid_update', ({ currentBid, bidderUsername, createdAt }) => {
       clearTimeout(bidTimeoutRef.current)
-      setAuction((prev) => (prev ? { ...prev, currentBid } : prev))
-      setLastBidder(bidderUsername)
+      setAuction((prev) =>
+        prev ? { ...prev, currentBid, currentWinnerId: { username: bidderUsername } } : prev
+      )
       setBidAmount('')
       setBidError('')
       setPlacingBid(false)
+
+      const liveId = `live-${Date.now()}`
       setBidHistory((prev) => [
-        { id: `live-${Date.now()}`, amount: currentBid, username: bidderUsername, createdAt },
+        { id: liveId, amount: currentBid, username: bidderUsername, createdAt },
         ...prev,
       ])
+      setHighlightId(liveId)
+      clearTimeout(highlightTimeoutRef.current)
+      highlightTimeoutRef.current = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS)
     })
 
     socket.on('bid_error', ({ message }) => {
@@ -115,12 +191,21 @@ export default function AuctionRoom() {
     })
 
     socket.on('auction_ended', ({ finalBid, winnerUsername }) => {
-      setAuction((prev) => (prev ? { ...prev, status: 'ended' } : prev))
-      setEndedInfo({ finalBid, winnerUsername })
+      setAuction((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'ended',
+              currentBid: finalBid,
+              currentWinnerId: winnerUsername ? { username: winnerUsername } : null,
+            }
+          : prev
+      )
     })
 
     return () => {
       clearTimeout(bidTimeoutRef.current)
+      clearTimeout(highlightTimeoutRef.current)
       socket.emit('leave_room', id)
       socket.off('connect')
       socket.off('disconnect')
@@ -161,6 +246,7 @@ export default function AuctionRoom() {
   }
 
   const isActive = auction.status === 'active'
+  const leadingBidder = auction.currentWinnerId?.username
   const isUrgent = isActive && remaining > 0 && remaining <= URGENT_THRESHOLD_MS
   const countdownLabel = remaining <= 0 ? 'Ending...' : formatCountdown(remaining)
 
@@ -196,13 +282,13 @@ export default function AuctionRoom() {
           <p className="text-muted-foreground">{auction.description}</p>
           <Separator />
 
-          {endedInfo && (
+          {!isActive && (
             <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 text-sm">
               <Trophy className="size-4 shrink-0" />
-              {endedInfo.winnerUsername ? (
+              {leadingBidder ? (
                 <span>
-                  Sold to <span className="font-medium">{endedInfo.winnerUsername}</span> for{' '}
-                  <span className="font-medium">{formatCurrency(endedInfo.finalBid)}</span>
+                  Sold to <span className="font-medium">{leadingBidder}</span> for{' '}
+                  <span className="font-medium">{formatCurrency(auction.currentBid)}</span>
                 </span>
               ) : (
                 <span>Auction ended with no bids</span>
@@ -224,9 +310,9 @@ export default function AuctionRoom() {
             ) : null}
           </div>
 
-          {lastBidder && (
+          {isActive && leadingBidder && (
             <p className="text-sm text-muted-foreground">
-              Last bid by <span className="font-medium">{lastBidder}</span>
+              Highest bidder <span className="font-medium">{leadingBidder}</span>
             </p>
           )}
 
@@ -241,6 +327,7 @@ export default function AuctionRoom() {
               <Input
                 type="number"
                 min="0"
+                step="1"
                 placeholder={`More than ${formatCurrency(auction.currentBid || auction.startingPrice)}`}
                 value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
@@ -265,21 +352,12 @@ export default function AuctionRoom() {
           <CardTitle className="text-base">Bid History</CardTitle>
         </CardHeader>
         <CardContent>
-          {bidHistory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bids yet</p>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {bidHistory.map((bid) => (
-                <div key={bid.id} className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{bid.username}</span>
-                  <span>{formatCurrency(bid.amount)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {bid.createdAt ? new Date(bid.createdAt).toLocaleTimeString() : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <BidHistoryTable
+            bids={bidHistory}
+            highlightId={highlightId}
+            currentUsername={user?.username}
+            isActive={isActive}
+          />
         </CardContent>
       </Card>
     </div>

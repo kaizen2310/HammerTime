@@ -1,8 +1,17 @@
 import Auction from '../models/Auction.js'
 import Bid from '../models/Bid.js'
+import { placeBidSchema } from '../validation/schemas.js'
 
 export const registerAuctionHandlers = (io, socket) => {
-  socket.on('place_bid', async ({ auctionId, amount }) => {
+  socket.on('place_bid', async (payload) => {
+    // Validate first: `amount` is used inside $expr, where Mongoose does not cast types,
+    // so a string or object from a hand-rolled client must never reach the query.
+    const parsed = placeBidSchema.safeParse(payload)
+    if (!parsed.success) {
+      return socket.emit('bid_error', { message: parsed.error.issues[0].message })
+    }
+    const { auctionId, amount } = parsed.data
+
     try {
       const updatedAuction = await Auction.findOneAndUpdate(
         {
