@@ -5,9 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
-import { CalendarIcon } from 'lucide-react'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { toast } from 'sonner'
 
 // Builds the end time in the user's local timezone and returns it as a UTC ISO string
@@ -21,6 +19,15 @@ const combineDateTime = (date, time) => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
+// Same rule the server enforces (createAuctionSchema: "End time must be in the future"), checked
+// here so the user sees it next to the picker instead of after submitting. Returns '' when OK.
+// Only called from event handlers, so reading the clock is fine.
+const END_IN_PAST = 'End time must be in the future'
+const validateEnd = (date, time) => {
+  const iso = combineDateTime(date, time)
+  return iso && new Date(iso).getTime() <= Date.now() ? END_IN_PAST : ''
+}
+
 export default function CreateAuction() {
   const [form, setForm] = useState({
     title: '',
@@ -29,7 +36,7 @@ export default function CreateAuction() {
   })
   const [date, setDate] = useState()
   const [time, setTime] = useState('18:00')
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [endError, setEndError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -37,9 +44,15 @@ export default function CreateAuction() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  const handleDateSelect = (selected) => {
-    setDate(selected)
-    setPickerOpen(false)
+  // The user's values are never adjusted for them; an invalid combination is flagged, not fixed.
+  const handleDateChange = (next) => {
+    setDate(next)
+    setEndError(validateEnd(next, time))
+  }
+
+  const handleTimeChange = (next) => {
+    setTime(next)
+    setEndError(validateEnd(date, next))
   }
 
   const endsAt = combineDateTime(date, time)
@@ -49,6 +62,14 @@ export default function CreateAuction() {
 
     if (!endsAt) {
       toast.error('Pick an end date and time')
+      return
+    }
+
+    // Re-check against the clock as of now: a time that was fine when picked may have passed.
+    const error = validateEnd(date, time)
+    if (error) {
+      setEndError(error)
+      toast.error(error)
       return
     }
 
@@ -110,37 +131,20 @@ export default function CreateAuction() {
             </div>
             <div className="space-y-1">
               <Label>Ends At</Label>
-              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-between font-normal"
-                    >
-                      {date ? `${date.toLocaleDateString()} at ${time}` : 'Select date and time'}
-                      <CalendarIcon className="size-4 opacity-60" />
-                    </Button>
-                  }
-                />
-                <PopoverContent className="w-auto space-y-3 p-3">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={handleDateSelect}
-                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
-                  />
-                  <div className="space-y-1">
-                    <Label htmlFor="time">Time</Label>
-                    <Input
-                      id="time"
-                      type="time"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <DateTimePicker
+                label="Ends at"
+                date={date}
+                time={time}
+                onDateChange={handleDateChange}
+                onTimeChange={handleTimeChange}
+                invalid={Boolean(endError)}
+                describedBy={endError ? 'ends-at-error' : undefined}
+              />
+              {endError && (
+                <p id="ends-at-error" role="alert" className="text-sm text-destructive">
+                  {endError}
+                </p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creating...' : 'Create Auction'}

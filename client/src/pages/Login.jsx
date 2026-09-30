@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
@@ -54,10 +55,10 @@ export default function Login() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
+                autoComplete="current-password"
                 value={form.password}
                 onChange={handleChange}
                 required

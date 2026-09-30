@@ -5,6 +5,7 @@ import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
 import { formatCurrency } from '../lib/format'
 import { useAuth } from '../context/AuthContext'
 import AuctionTimerCard from '../components/AuctionTimerCard'
+import { LiveIndicator } from '@/components/ui/live-indicator'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -124,7 +125,6 @@ export default function AuctionRoom() {
     setBidError('')
     setPlacingBid(false)
   }
-
 
   const fetchAuction = ({ silent } = {}) => {
     if (!silent) setLoading(true)
@@ -277,8 +277,8 @@ export default function AuctionRoom() {
   if (!auction) {
     return <p className="text-muted-foreground">Auction not found.</p>
   }
-  const isActive = auction.status === 'active' && new Date(auction.endsAt).getTime() > Date.now()
 
+  const isActive = auction.status === 'active' && new Date(auction.endsAt).getTime() > Date.now()
   const leadingBidder = auction.currentWinnerId?.username
   const displayBid = auction.currentBid || auction.startingPrice
 
@@ -289,8 +289,10 @@ export default function AuctionRoom() {
   return (
     // The app's <main> is max-w-4xl. This centres a wider column on it (viewport width minus
     // page padding on small screens) without touching the global layout. The muted backdrop
-    // keeps the white cards from blending into the white page.
-    <div className="relative left-1/2 w-[min(64rem,calc(100vw_-_2rem))] -translate-x-1/2 space-y-4 rounded-2xl bg-muted/60 p-3 sm:p-4">
+    // keeps the white cards from blending into the white page. In dark mode --muted is lighter
+    // than --card, so the same 60% backdrop would sit *above* the cards; it is dimmed there so
+    // the page < backdrop < card layering still reads the right way round.
+    <div className="relative left-1/2 w-[min(64rem,calc(100vw_-_2rem))] -translate-x-1/2 space-y-4 rounded-2xl bg-muted/60 p-3 sm:p-4 dark:bg-muted/20">
       <AuctionTimerCard endsAt={auction.endsAt} isActive={isActive} onEnd={handleAuctionEnd} />
       {!connected && (
         <div
@@ -312,19 +314,22 @@ export default function AuctionRoom() {
         <Card className="min-w-0">
           <CardHeader className="gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Badge variant={isActive ? 'default' : 'outline'} className="gap-1.5">
-                <span
-                  className={cn(
-                    'size-1.5 rounded-full',
-                    isActive ? 'bg-background' : 'bg-muted-foreground'
-                  )}
-                />
-                {isActive ? 'Live' : 'Ended'}
-              </Badge>
-              <Badge variant="outline">
-                <Eye />
-                {viewerCount} watching
-              </Badge>
+              {isActive ? (
+                // One indicator for what used to be two badges: auction is live, how many are
+                // watching, and whether the socket is currently connected.
+                <LiveIndicator viewers={viewerCount} reconnecting={!connected} />
+              ) : (
+                <>
+                  <Badge variant="outline" className="gap-1.5">
+                    <span className="size-1.5 rounded-full bg-muted-foreground" />
+                    Ended
+                  </Badge>
+                  <Badge variant="outline">
+                    <Eye />
+                    {viewerCount} watching
+                  </Badge>
+                </>
+              )}
             </div>
 
             <div className="space-y-2">
