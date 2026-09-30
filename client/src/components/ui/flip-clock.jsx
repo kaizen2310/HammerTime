@@ -16,7 +16,7 @@ const flipUnitVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground",
         secondary: "bg-secondary text-secondary-foreground",
-        destructive: "bg-destructive text-destructive-foreground",
+        destructive: "bg-destructive text-destructive-foreground dark:text-background",
         outline: "border border-input bg-background text-foreground",
         muted: "bg-muted text-muted-foreground"
       }
