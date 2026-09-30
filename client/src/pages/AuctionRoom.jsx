@@ -110,6 +110,22 @@ export default function AuctionRoom() {
   const highlightTimeoutRef = useRef(null)
   const auctionEndEffectRef = useRef(null)
 
+  const handleAuctionEnd = () => {
+    setAuction((prev) =>
+      prev
+        ? {
+          ...prev,
+          status: 'ended',
+        }
+        : prev
+    )
+
+    setBidAmount('')
+    setBidError('')
+    setPlacingBid(false)
+  }
+
+
   const fetchAuction = ({ silent } = {}) => {
     if (!silent) setLoading(true)
     return api.get(`/auctions/${id}`)
@@ -261,8 +277,8 @@ export default function AuctionRoom() {
   if (!auction) {
     return <p className="text-muted-foreground">Auction not found.</p>
   }
+  const isActive = auction.status === 'active' && new Date(auction.endsAt).getTime() > Date.now()
 
-  const isActive = auction.status === 'active'
   const leadingBidder = auction.currentWinnerId?.username
   const displayBid = auction.currentBid || auction.startingPrice
 
@@ -275,8 +291,7 @@ export default function AuctionRoom() {
     // page padding on small screens) without touching the global layout. The muted backdrop
     // keeps the white cards from blending into the white page.
     <div className="relative left-1/2 w-[min(64rem,calc(100vw_-_2rem))] -translate-x-1/2 space-y-4 rounded-2xl bg-muted/60 p-3 sm:p-4">
-      <AuctionTimerCard endsAt={auction.endsAt} isActive={isActive} />
-
+      <AuctionTimerCard endsAt={auction.endsAt} isActive={isActive} onEnd={handleAuctionEnd} />
       {!connected && (
         <div
           role="status"

@@ -27,7 +27,7 @@ export default function AuctionTimerCard({ endsAt, isActive }) {
     showDays: 'never',
     'aria-live': 'off',
     ...(isRunning
-      ? { targetDate, variant: isUrgent ? 'destructive' : 'default' }
+      ? { targetDate, variant: isUrgent ? 'destructive' : 'secondary' }
       : { variant: 'muted' }),
   }
 
